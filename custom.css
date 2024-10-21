@@ -1,0 +1,8 @@
+body {
+    font-size: 22px;  /* Adjust this value for your preferred font size */
+}
+
+/* Justify the main text */
+.remark-slide-content p {
+    text-align: justify;
+}

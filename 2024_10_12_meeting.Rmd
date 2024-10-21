@@ -1,0 +1,116 @@
+---
+title: 'Meeting: Dr. Song/Soumik'
+author: "On the potential use of NHANES data"
+date: "2024-10-12"
+output: ioslides_presentation
+css: custom.css
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+```
+
+## Introduction
+
+[**The bidirectional associations between sarcopenia-related traits and cognitive performance**](https://www.nature.com/articles/s41598-024-58416-w) (Lu et al., 2024, *Scientific Reports*)
+
+
+- Many studies explore association of sarcopenia‐related traits with cognitive performance.
+- These studies have yielded contradictory results without any clear indication of the causality of such relationships. 
+- Causal relationships between the two were examined from NHANES data via a two‐sample Mendelian randomization (MR) analysis approach.
+    - Higher hand grip strength was positively associated with a better cognitive performance. 
+
+## My findings 
+
+- Cognitive functioning measured through **delayed recall**, **digit substitution ability**, and **animal fluency**. 
+- Sarcopenia measured through **hand-grip strength** (for now - there are more variables.)
+
+```{r load_and_prepare, echo = FALSE, message=FALSE}
+pacman::p_load(haven, tidyverse, here, infotheo)
+
+affine_unif <- function(x){
+  (x - min(x))/(max(x) - min(x))
+}
+
+## demographic data
+demo <- read_xpt(file.path(here(), "data/2024_10_11_DEMO_G.XPT"))
+demo <- demo[colnames(demo) %in% c("SEQN", "RIAGENDR", "RIDAGEYR")] %>%
+  drop_na()
+
+## cognitive functioning data
+cf <- read_xpt(file.path(here(), "data/2024_10_11_CFQ_G.XPT"))
+cf <- cf[colnames(cf) %in% c("SEQN", "CFDDS", "CFDCSR", "CFDAST")] %>% 
+  drop_na()
+
+## grip strength data
+hgs <- read_xpt(file.path(here(), "data/2024_10_11_MGX_G.XPT"))
+hgs <- hgs[colnames(hgs) %in% c("SEQN", "MGDCGSZ")] %>% 
+  drop_na()
+
+## walking speed data
+ws <- read_xpt(file.path(here(), "data/2024_10_11_MSX_B.XPT"))
+ws <- ws[colnames(ws) %in% c("SEQN", "MSAEXLEN")] %>% 
+  drop_na()
+
+data <- inner_join(inner_join(demo, cf), hgs) %>% 
+  mutate(CFDCSR = round(CFDCSR), 
+         CFDAST = round(CFDAST), 
+         CFDDS = round(CFDDS), 
+         MGDCGSZ = round(MGDCGSZ))
+```
+
+-   Non-significant Kendall's $\tau$ between hand-grip strength and delayed recall. 
+```{r hgs_cfdcsr}
+cor.test(x = data %>% pull(c(CFDCSR)),
+         y = data %>% pull(c(MGDCGSZ)), 
+         method = "kendall")$p.value
+```
+
+------
+
+-   Significant Kendall's $\tau$ between hand-grip strength ($X$) and animal fluency ($Y$). Positive $H(X) - H(Y)$.
+
+```{r hgs_cfdast}
+cor.test(x = data %>% pull(c(CFDAST)),
+         y = data %>% pull(c(MGDCGSZ)), 
+         method = "kendall")$p.value
+estims <- replicate(1000, 
+                    {
+                      temp <- data[sample(1:nrow(data), nrow(data), replace = TRUE), ]
+                      
+                      p_CFDAST <- table(temp$CFDAST)
+                      p_CFDAST <- p_CFDAST/sum(p_CFDAST)
+                      
+                      p_MGDCGSZ <- table(temp$MGDCGSZ)
+                      p_MGDCGSZ <- p_MGDCGSZ/sum(p_MGDCGSZ)
+                      
+                      sum(log(p_CFDAST)*p_CFDAST) - sum(log(p_MGDCGSZ)*p_MGDCGSZ)
+                    })
+
+mean(estims)
+quantile(estims, c(0.025, 0.975))
+```
+
+------
+
+-   Significant Kendall's $\tau$ between hand-grip strength ($X$) and digit substitution ($Y$). Positive $H(X) - H(Y)$.
+
+```{r hgs_cfdds}
+cor.test(x = data %>% pull(c(CFDDS)),
+         y = data %>% pull(c(MGDCGSZ)), 
+         method = "kendall")$p.value
+estims <- replicate(1000, 
+                    {
+                      temp <- data[sample(1:nrow(data), nrow(data), replace = TRUE), ]
+                      
+                      p_CFDDS <- table(temp$CFDDS)
+                      p_CFDDS <- p_CFDDS/sum(p_CFDDS)
+                      
+                      p_MGDCGSZ <- table(temp$MGDCGSZ)
+                      p_MGDCGSZ <- p_MGDCGSZ/sum(p_MGDCGSZ)
+                      
+                      sum(log(p_CFDDS)*p_CFDDS) - sum(log(p_MGDCGSZ)*p_MGDCGSZ)
+                    })
+mean(estims)
+quantile(estims, c(0.025, 0.975))
+```
